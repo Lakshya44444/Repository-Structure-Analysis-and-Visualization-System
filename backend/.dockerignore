@@ -1,0 +1,5 @@
+.env
+.ai_cache
+.repos
+__pycache__
+*.pyc

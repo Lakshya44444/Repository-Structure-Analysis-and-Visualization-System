@@ -6,6 +6,8 @@ venv/
 backend/.env
 backend/.ai_cache/
 backend/.repos/
+.env
+*.log
 
 # Node / frontend
 node_modules/

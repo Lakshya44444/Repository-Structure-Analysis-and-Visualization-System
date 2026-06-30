@@ -1,184 +1,131 @@
 # Repository Structure Analysis and Visualization System
 
-A full-stack developer tool that analyzes any local or GitHub repository and renders it as an **interactive dependency graph** : complete with code metrics, circular dependency detection, hotspot ranking, and AI-generated file and architecture summaries.
+A full-stack developer tool that analyzes a local or GitHub repository and renders it as an interactive dependency graph with code metrics, circular dependency detection, hotspot ranking, and AI-generated file summaries.
 
-Unlike static file explorers or simple dependency scanners, this system combines **static analysis + graph visualization + AI explanation** in a single workflow, making it practical for onboarding, code review, and pre-refactoring audits.
-
----
+The goal is to make unfamiliar repositories easier to understand. Instead of only showing folders like a normal file explorer, the system scans source files, extracts internal dependencies, calculates useful metrics, and displays the result on a draggable React Flow canvas.
 
 ## Features
 
-### Core Analysis
-- **Multi-language dependency extraction** — Python (`ast` + regex fallback), JavaScript/TypeScript (`import` / `require` / `export from`), C/C++ (`#include`), Go (`import` + `go.mod` module resolution)
-- **Code metrics per file** — lines of code, total lines, estimated cyclomatic complexity, file size, fan-in, fan-out
-- **Git churn** — counts how often each file changed across git history (up to 4000 commits)
-- **Hotspot score** — normalized `complexity × churn`; files that are both complex and frequently changed rank highest
-- **Circular dependency detection** — Tarjan's strongly connected components algorithm, iterative implementation to avoid recursion limits on large graphs
+### Repository Analysis
+
+- Analyze an absolute local path or a GitHub URL such as `owner/repo` or `https://github.com/user/repo`.
+- Static dependency extraction without executing target repository code.
+- Python dependency parsing using `ast` with regex fallback.
+- JavaScript/TypeScript parsing for `import`, `require`, and `export ... from`.
+- C/C++ parsing for `#include`.
+- Go parsing with `go.mod` module resolution.
+- Supported source file detection for Python, JavaScript, TypeScript, C/C++, Go, Java, Ruby, and Rust.
+
+### Code Metrics
+
+- Lines of code and total lines.
+- Estimated cyclomatic complexity.
+- File size.
+- Fan-in and fan-out coupling.
+- Git churn from commit history.
+- Hotspot score based on complexity and churn.
+- Circular dependency detection using Tarjan's strongly connected components algorithm.
 
 ### Visualization
-- **Interactive React Flow canvas** — zoom, pan, drag nodes, minimap, curved animated edges
-- **Color modes** — language-based coloring, hotspot heat map (green→red), complexity heat map
-- **Folder grouping** — sparse or large repos are automatically clustered by folder so the graph stays readable
-- **Large repo handling** — dagre layout for small dense graphs; custom grid cluster layout for sparse/large graphs; file cap with user notification
-- **PNG export** — one-click canvas snapshot
 
-### Insights Panel
-- Repository-level stats (files, edges, LoC, cycle count)
-- Top risk hotspots ranked by complexity × churn
-- Most depended-on files (highest fan-in)
-- Most complex files
-- Language breakdown
-- Circular dependency groups with clickable file chips
+- React Flow canvas with zoom, pan, draggable nodes, minimap, and curved dependency edges.
+- Dagre layout for small dense graphs.
+- Folder-cluster layout for sparse or large graphs, preventing the graph from becoming a tiny straight line.
+- Language, hotspot, and complexity color modes.
+- Search, language filter, LoC filter, and cycle-only filter.
+- PNG export.
 
-### AI Summaries
-- **Per-file explanation** — clicking a node requests a 3-sentence plain-language summary from the AI provider, with import/export context injected into the prompt
-- **Architecture overview** — whole-repo narrative generated from a graph digest (file count, dependency sample, hotspot list, language breakdown)
-- **Content-hash cache** — summaries are stored by SHA-256 hash of `(file content + context + provider + model)`; unchanged files are never re-analyzed
-- **Graceful offline fallback** — if no API key is set, a deterministic heuristic summary is generated locally so the app remains fully usable without internet
+### AI Features
 
-### Other
-- **GitHub URL support** — enter `owner/repo` or a full HTTPS URL; the backend shallow-clones with `--depth 20` and caches the clone
-- **Source code viewer** — syntax-highlighted file preview with copy button inside the side panel
-- **Search + filters** — filename search, language filter chips, LoC range slider, cycle-only toggle
-- **Configurable backend URL** — gear icon lets you point the frontend at any backend host at runtime
+- Click a file node to generate a short plain-English explanation.
+- Supports Google Gemini or OpenAI.
+- Offline heuristic fallback if no API key is configured.
+- Content-hash cache so unchanged files are not re-analyzed.
+- Whole-repository architecture overview from graph statistics and dependency samples.
 
----
+### Deployment and Safety Additions
+
+- Dockerfiles for backend and frontend.
+- `docker-compose.yml` for one-command local container startup.
+- Basic in-memory rate limiting for expensive API endpoints.
+- GitHub clone cache and AI summary cache.
+- File-serving guardrails to prevent path traversal outside analyzed roots.
 
 ## Tech Stack
 
 | Layer | Technology |
-|---|---|
-| Backend | Python 3.10+ · FastAPI · Pydantic · Uvicorn |
-| Analysis | Python `ast` · regex · subprocess `git` CLI |
-| Frontend | React 18 · Vite · React Flow · Dagre |
-| Styling | Vanilla CSS |
-| AI | Google Gemini API · OpenAI API · offline heuristic fallback |
-
----
-
-## System Architecture
-
-```mermaid
-flowchart TD
-    A["User Input\n(Local path or GitHub URL)"] --> B{Remote URL?}
-    B -- Yes --> C["git clone --depth 20\n(.repos cache)"]
-    B -- No  --> D["Local directory"]
-    C --> E
-    D --> E["analyzer.py\nFile walker"]
-
-    E --> F["Import extraction\n(Python AST / JS regex / C includes / Go imports)"]
-    E --> G["Metrics\n(LoC · complexity · size)"]
-    E --> H["git log\n(churn)"]
-
-    F --> I["Dependency graph\n(nodes + edges)"]
-    G --> I
-    H --> I
-
-    I --> J["find_cycles\n(Tarjan SCC)"]
-    I --> K["Hotspot score\n(complexity × churn)"]
-
-    J --> L["GraphResult JSON\n(FastAPI response)"]
-    K --> L
-
-    L --> M["React Frontend\ngraph.js buildElements"]
-    M --> N["React Flow Canvas\n(dagre / cluster layout)"]
-
-    N --> O["File node clicked"]
-    O --> P["ai.py summarize\n(Gemini · OpenAI · offline)"]
-    P -- "cache hit" --> Q["SHA-256 file cache\n(.ai_cache/)"]
-    P -- "cache miss" --> R["AI provider API"]
-    R --> Q
-    Q --> S["AI Summary\n(SidePanel)"]
-
-    N --> T["Insights Panel\n(hotspots · cycles · language breakdown)"]
-    N --> U["Architecture overview\n(whole-repo AI digest)"]
-```
-
----
+| --- | --- |
+| Backend | Python, FastAPI, Pydantic, Uvicorn |
+| Analysis | Python `ast`, regex parsing, git CLI |
+| Frontend | React, Vite, React Flow |
+| Layout | Dagre plus custom folder-cluster layout |
+| AI | Gemini, OpenAI, offline fallback |
+| Deployment | Docker, Docker Compose, Nginx for frontend container |
 
 ## Project Structure
 
-```
+```text
 project_gdsc/
-├── backend/
-│   ├── main.py          # FastAPI app — REST endpoints, git clone, file serving
-│   ├── analyzer.py      # File walker, import parsing, metrics, Tarjan SCC, churn
-│   ├── ai.py            # AI summarization with SHA-256 content-hash cache
-│   ├── requirements.txt
-│   └── .env.example     # AI provider configuration template
-├── frontend/
-│   └── src/
-│       ├── App.jsx              # Main canvas, state, toolbar, filters
-│       ├── api.js               # Fetch wrappers for all backend endpoints
-│       ├── graph.js             # dagre layout, cluster layout, color modes, digest builder
-│       ├── styles.css
-│       └── components/
-│           ├── FileNode.jsx     # Custom React Flow node
-│           ├── FolderGroup.jsx  # Folder container node
-│           ├── InsightsPanel.jsx
-│           └── SidePanel.jsx    # Metrics, deps, AI summary, source viewer
-├── start-backend.bat
-└── start-frontend.bat
+|-- backend/
+|   |-- main.py            # FastAPI app, API routes, git cloning, rate limiting
+|   |-- analyzer.py        # Repository traversal, dependency parsing, metrics
+|   |-- ai.py              # AI summaries and SHA-256 cache
+|   |-- requirements.txt
+|   |-- Dockerfile
+|   |-- .env.example
+|-- frontend/
+|   |-- src/
+|   |   |-- App.jsx
+|   |   |-- api.js
+|   |   |-- graph.js
+|   |   |-- components/
+|   |   |   |-- FileNode.jsx
+|   |   |   |-- FolderGroup.jsx
+|   |   |   |-- InsightsPanel.jsx
+|   |   |   |-- SidePanel.jsx
+|   |-- Dockerfile
+|   |-- nginx.conf
+|   |-- package.json
+|-- docker-compose.yml
+|-- start-backend.bat
+|-- start-frontend.bat
 ```
 
----
-
-## Setup and Run Instructions
+## Run Locally
 
 ### Prerequisites
 
-| Requirement | Version |
-|---|---|
-| Python | 3.10 or newer |
-| Node.js | 18 or newer |
-| Git | any recent version, available in PATH |
+- Python 3.10 or newer
+- Node.js 18 or newer
+- Git installed and available in PATH
 
----
-
-### Step 1 — Backend
+### Backend
 
 ```bash
 cd backend
-pip install -r requirements.txt
-python -m uvicorn main:app --reload --port 8000
+python -m pip install -r requirements.txt
+python -m uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Verify it's running:
+Backend URL:
+
+```text
+http://127.0.0.1:8000
 ```
-http://127.0.0.1:8000/docs    ← Swagger UI for all endpoints
-http://127.0.0.1:8000/api/health
+
+Swagger API docs:
+
+```text
+http://127.0.0.1:8000/docs
 ```
 
-> **Windows shortcut:** double-click `start-backend.bat` from the project root.
-
----
-
-### Step 2 — AI Configuration (optional but recommended)
+On Windows, you can also run:
 
 ```bash
-cd backend
-copy .env.example .env
+start-backend.bat
 ```
 
-Edit `.env` and add one key:
-
-```env
-# Option A — Google Gemini (recommended, free tier available)
-GEMINI_API_KEY=your_gemini_key_here
-
-# Option B — OpenAI
-OPENAI_API_KEY=your_openai_key_here
-
-# Model overrides (optional)
-GEMINI_MODEL=gemini-2.0-flash
-OPENAI_MODEL=gpt-4o-mini
-```
-
-**Without any key:** the app still runs fully — file summaries and architecture overviews fall back to a deterministic offline heuristic. No features are broken.
-
----
-
-### Step 3 — Frontend
+### Frontend
 
 ```bash
 cd frontend
@@ -186,32 +133,103 @@ npm install
 npm run dev
 ```
 
-Open: `http://127.0.0.1:5173`
+Frontend URL:
 
-> **Windows shortcut:** double-click `start-frontend.bat` from the project root.
+```text
+http://127.0.0.1:5173
+```
 
----
+On Windows, you can also run:
 
-### Step 4 — Analyze a Repository
+```bash
+start-frontend.bat
+```
 
-1. Enter a **local path** (e.g. `C:\code\my-project`) or a **GitHub URL** (e.g. `owner/repo` or `https://github.com/owner/repo`)
-2. Click **Analyze**
-3. Explore the graph — click any node to open its side panel with metrics, dependencies, and AI summary
-4. Click **Generate AI overview** in the Insights panel for a whole-repo narrative
+## Optional AI Configuration
 
----
+Copy the example file:
 
-## API Reference
+```bash
+cd backend
+copy .env.example .env
+```
 
-| Method | Endpoint | Body | Description |
-|---|---|---|---|
-| `GET` | `/api/health` | — | Backend status and active AI provider |
-| `POST` | `/api/analyze` | `{ path, max_files }` | Analyze a local path or GitHub URL; returns full graph JSON |
-| `GET` | `/api/file` | `?root=&path=` | Return raw source of a file within an analyzed root |
-| `POST` | `/api/summarize` | `{ root, path, force, imports, imported_by }` | AI summary for a selected file |
-| `POST` | `/api/architecture` | `{ root, digest, force }` | Whole-repo architecture overview from a graph digest |
+Example `.env`:
 
-Example request to `/api/analyze`:
+```env
+AI_PROVIDER=auto
+GEMINI_API_KEY=
+OPENAI_API_KEY=
+GEMINI_MODEL=gemini-2.0-flash
+OPENAI_MODEL=gpt-4o-mini
+```
+
+If no key is configured, the project still works with offline summaries.
+
+## Docker Run
+
+From the project root:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+Frontend: http://127.0.0.1:5173
+Backend:  http://127.0.0.1:8000
+Docs:     http://127.0.0.1:8000/docs
+```
+
+Optional environment variables:
+
+```bash
+set GEMINI_API_KEY=your_key_here
+set AI_RATE_LIMIT=30
+set ANALYZE_RATE_LIMIT=20
+docker compose up --build
+```
+
+On Linux/macOS:
+
+```bash
+GEMINI_API_KEY=your_key_here docker compose up --build
+```
+
+## Testing Workflow
+
+1. Start backend and frontend.
+2. Open `http://127.0.0.1:5173`.
+3. Enter a repository URL, for example:
+
+```text
+https://github.com/Lakshya44444/DrishtiAI
+```
+
+or:
+
+```text
+https://github.com/rootp1/koordinator
+```
+
+4. Click **Analyze**.
+5. Inspect repository stats, folder groups, file nodes, and dependency edges.
+6. Click a file node to view metrics, dependencies, source code, and AI summary.
+7. Open `http://127.0.0.1:8000/docs` and test the backend endpoints directly.
+
+## API Endpoints
+
+| Method | Endpoint | Purpose |
+| --- | --- | --- |
+| `GET` | `/api/health` | Backend status and active AI provider |
+| `POST` | `/api/analyze` | Analyze a local path or GitHub repository |
+| `GET` | `/api/file` | Fetch raw source for a selected file |
+| `POST` | `/api/summarize` | Generate or read cached AI summary for one file |
+| `POST` | `/api/architecture` | Generate or read cached repository overview |
+
+Example `/api/analyze` request:
+
 ```json
 {
   "path": "https://github.com/Lakshya44444/DrishtiAI",
@@ -219,47 +237,66 @@ Example request to `/api/analyze`:
 }
 ```
 
----
+## Rate Limiting
 
-## Recommended Test Repositories
+The backend includes simple in-memory per-client rate limiting:
 
-| Repository | What it demonstrates |
-|---|---|
-| `https://github.com/Lakshya44444/DrishtiAI` | Folder grouping, AI summaries, mixed Python + JS |
-| `https://github.com/rootp1/koordinator` | Large-repo performance, Go module resolution, hotspot ranking |
-| Any local project on your machine | Fastest analysis, full git churn data |
+| Bucket | Default |
+| --- | --- |
+| `/api/analyze` | 20 requests per minute |
+| `/api/summarize` and `/api/architecture` | 30 requests per minute |
+| Other endpoints | 240 requests per minute |
 
----
+Override with environment variables:
 
-## Assumptions and Additional Features
+```env
+ANALYZE_RATE_LIMIT=20
+AI_RATE_LIMIT=30
+GENERAL_RATE_LIMIT=240
+```
 
-### Assumptions
-- **Static analysis only** — the tool never executes repository code; it reads source text and parses imports with `ast` or regex. This makes it safe for unknown projects.
-- **Internal dependencies only** — external packages (`react`, `numpy`, `fastapi`, etc.) are intentionally excluded. The graph focuses on the internal architecture of the project.
-- **Git churn requires git history** — if the analyzed directory has no `.git` folder, churn is 0 for all files and hotspot is computed from complexity alone.
-- **Language support scope** — import extraction is implemented for Python, JavaScript, TypeScript, C/C++, and Go. Java, Ruby, and Rust files appear as nodes but their imports are not parsed.
+Set a value to `0` to disable that bucket.
 
-### Additional Features (beyond the base requirement)
+## Assumptions and Limitations
 
-| Feature | Details |
-|---|---|
-| **GitHub URL analysis** | Supports `owner/repo` shorthand, full HTTPS URLs, and SSH URLs. Clone is cached so repeated analysis of the same repo is instant. |
-| **Content-hash AI cache** | Cache key = SHA-256 of `(file content + dependency context + provider + model)`. Summaries are invalidated only when the file actually changes. |
-| **Offline AI fallback** | Deterministic heuristic summary extracts docstrings, leading comments, and line/definition counts — no API key required. |
-| **Tarjan SCC cycle detection** | Iterative implementation avoids Python's recursion limit on repos with thousands of files. Cycle members are flagged on every affected node and edge. |
-| **Hotspot ranking** | Normalized `complexity × churn` combines static and dynamic signals. Useful for prioritizing technical debt. |
-| **Fan-in / fan-out coupling** | Identifies highly coupled files (many dependents = fragile to change; many imports = hard to isolate). |
-| **Dual layout engine** | Dagre hierarchical layout for small dense graphs; custom folder-cluster grid layout for sparse or large repos — prevents degenerate straight-line graphs. |
-| **Resizable side panel** | Drag handle between canvas and panel to resize at runtime. |
-| **Syntax-highlighted source** | File content fetched from backend and rendered with Prism syntax highlighting inside the side panel. |
-| **PNG export** | Temporarily hides overlay UI elements, renders the canvas to a full-resolution PNG, then restores the UI. |
-| **Abort / cancel** | Long-running analyze requests (especially remote clones) can be cancelled mid-flight via `AbortController`. |
-| **FastAPI Swagger docs** | All endpoints are fully documented at `/docs` for easy manual testing. |
+- The analyzer is static; it does not execute target code.
+- External packages such as `react`, `numpy`, and `fastapi` are intentionally skipped.
+- Dynamic imports, reflection, generated code, and dependency injection may not be fully detected.
+- Git churn requires git history in the analyzed repository.
+- Large repositories are capped for browser performance.
+- Frontend default request size is 900 source files.
+- Backend hard cap is 1500 source files.
+- Docker setup is suitable for local/demo deployment, not hardened public production.
 
----
+## Extra Verification Points
+
+These features go beyond the base requirement:
+
+- GitHub URL analysis with shallow clone and local clone cache.
+- AI summaries with Gemini/OpenAI plus offline fallback.
+- Content-hash AI cache to reduce API cost.
+- Circular dependency detection.
+- Hotspot ranking using complexity and git churn.
+- Folder grouping for sparse repositories.
+- Large-repository safeguards.
+- Syntax-highlighted source viewer.
+- PNG export.
+- FastAPI Swagger docs.
+- Docker Compose deployment.
+- Basic API rate limiting.
 
 ## Security Notes
 
-- Files are only served from repositories analyzed in the current session — the backend tracks analyzed roots and rejects any path outside them.
-- Path traversal is blocked: every file request is resolved and checked to be within the analyzed root before reading.
-- CORS is open (`*`) for local development. Set a specific origin in `main.py` before any public deployment.
+- File reads are restricted to roots analyzed in the current backend session.
+- Path traversal attempts are rejected.
+- CORS is open for local development. Restrict `allow_origins` before public deployment.
+- Rate limiting is in-memory and resets on backend restart. A production deployment should use Redis or an API gateway for distributed rate limiting.
+
+## Recommended Demo Repositories
+
+```text
+https://github.com/Lakshya44444/DrishtiAI
+https://github.com/rootp1/koordinator
+```
+
+DrishtiAI is good for showing folder grouping and AI summaries. Koordinator is good for showing large-repository performance handling.

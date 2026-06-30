@@ -1,0 +1,38 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      AI_PROVIDER: ${AI_PROVIDER:-auto}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.0-flash}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      ANALYZE_RATE_LIMIT: ${ANALYZE_RATE_LIMIT:-20}
+      AI_RATE_LIMIT: ${AI_RATE_LIMIT:-30}
+      GENERAL_RATE_LIMIT: ${GENERAL_RATE_LIMIT:-240}
+    volumes:
+      - repo-cache:/app/.repos
+      - ai-cache:/app/.ai_cache
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-http://127.0.0.1:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  repo-cache:
+  ai-cache:

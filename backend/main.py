@@ -5,13 +5,15 @@ import os
 import re
 import shutil
 import subprocess
-import tempfile
+import time
+from collections import defaultdict, deque
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from starlette.responses import JSONResponse
 
 
 def _load_dotenv() -> None:
@@ -45,6 +47,47 @@ app.add_middleware(
 )
 
 _ANALYZED_ROOTS: set[str] = set()
+_RATE_LIMIT_BUCKETS: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+
+def _rate_limit_for_path(path: str) -> tuple[str, int, int]:
+    """Return (bucket_name, max_requests, window_seconds)."""
+    if path == "/api/analyze":
+        return "analyze", int(os.environ.get("ANALYZE_RATE_LIMIT", "20")), 60
+    if path in {"/api/summarize", "/api/architecture"}:
+        return "ai", int(os.environ.get("AI_RATE_LIMIT", "30")), 60
+    return "general", int(os.environ.get("GENERAL_RATE_LIMIT", "240")), 60
+
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    bucket_name, limit, window_seconds = _rate_limit_for_path(request.url.path)
+    if limit <= 0:
+        return await call_next(request)
+
+    client = request.client.host if request.client else "unknown"
+    key = (client, bucket_name)
+    now = time.monotonic()
+    bucket = _RATE_LIMIT_BUCKETS[key]
+
+    while bucket and now - bucket[0] > window_seconds:
+        bucket.popleft()
+
+    if len(bucket) >= limit:
+        retry_after = max(1, int(window_seconds - (now - bucket[0])))
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": (
+                    f"Rate limit exceeded for {bucket_name}. "
+                    f"Try again in {retry_after} seconds."
+                )
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    bucket.append(now)
+    return await call_next(request)
 
 
 class AnalyzeRequest(BaseModel):
@@ -88,8 +131,8 @@ class SummarizeRequest(BaseModel):
     root: str
     path: str
     force: bool = False
-    imports: List[str] = []
-    imported_by: List[str] = []
+    imports: List[str] = Field(default_factory=list)
+    imported_by: List[str] = Field(default_factory=list)
 
 
 class ArchitectureRequest(BaseModel):
