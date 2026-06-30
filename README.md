@@ -1,6 +1,6 @@
 # Repository Structure Analysis and Visualization System
 
-A full-stack developer tool that analyzes any local or GitHub repository and renders it as an **interactive dependency graph** — complete with code metrics, circular dependency detection, hotspot ranking, and AI-generated file and architecture summaries.
+A full-stack developer tool that analyzes any local or GitHub repository and renders it as an **interactive dependency graph** : complete with code metrics, circular dependency detection, hotspot ranking, and AI-generated file and architecture summaries.
 
 Unlike static file explorers or simple dependency scanners, this system combines **static analysis + graph visualization + AI explanation** in a single workflow, making it practical for onboarding, code review, and pre-refactoring audits.
 
